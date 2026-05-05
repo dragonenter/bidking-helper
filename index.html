@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>竞拍之王 · 仓估值助手</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <h1>竞拍之王 · 仓估值助手</h1>
+  <p class="subtitle">输入角色技能解锁的信息，实时估算仓的期望价值和出价上限</p>
+</header>
+
+<main class="grid">
+  <section class="panel input-panel">
+    <h2>输入</h2>
+
+    <div class="row">
+      <label>角色</label>
+      <select id="role"></select>
+    </div>
+
+    <div class="row">
+      <label>仓品类</label>
+      <select id="category">
+        <option value="">全局基准（未确定品类）</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label>当前轮次</label>
+      <select id="round">
+        <option value="1">第 1 轮 (2.0× 速胜)</option>
+        <option value="2">第 2 轮 (1.6× 速胜)</option>
+        <option value="3">第 3 轮 (1.4× 速胜)</option>
+        <option value="4">第 4 轮 (1.2× 速胜)</option>
+        <option value="5">第 5 轮 (最高价获胜)</option>
+      </select>
+    </div>
+
+    <hr>
+
+    <div id="dynamic-fields"></div>
+
+    <div class="actions">
+      <button id="reset">清空</button>
+    </div>
+  </section>
+
+  <section class="panel result-panel">
+    <h2>结果</h2>
+    <div id="result"></div>
+  </section>
+</main>
+
+<script type="module" src="ui/app.js"></script>
+</body>
+</html>
