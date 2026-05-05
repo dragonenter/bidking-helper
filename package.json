@@ -10,6 +10,7 @@
     "serve": "python3 -m http.server 8765"
   },
   "devDependencies": {
+    "esbuild": "^0.21.0",
     "playwright": "^1.45.0"
   }
 }
