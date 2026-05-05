@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { GLOBAL_EXACT, GRID_PRICES, ROUND_RULES } from '../data/globals.js';
 import { CATEGORY_DATA } from '../data/categories.js';
+import { ROLES } from '../data/roles.js';
 
 test('GLOBAL_EXACT carries known sarkozyfan baseline', () => {
   assert.equal(GLOBAL_EXACT.purpleItem, 0.891);
@@ -45,4 +46,21 @@ test('CATEGORY_DATA matches sarkozyfan known values for 武器装备', () => {
   const weapons = CATEGORY_DATA.find((c) => c.name === '武器装备');
   assert.equal(weapons.redItem, 27.71);
   assert.equal(weapons.purpleGrid, 0.21);
+});
+
+test('ROLES contains all 7 v1 characters', () => {
+  const expected = ['victor', 'ahmad', 'lavin', 'ethan', 'isabella', 'aisha', 'oldman'];
+  for (const id of expected) {
+    assert.ok(ROLES[id], `role ${id} missing`);
+    assert.ok(ROLES[id].label);
+    assert.ok(ROLES[id].fieldsByRound);
+  }
+});
+
+test('ahmad role has fields per round 1..5', () => {
+  const ahmad = ROLES.ahmad;
+  for (const r of [1, 2, 3, 4, 5]) {
+    assert.ok(Array.isArray(ahmad.fieldsByRound[r]));
+  }
+  assert.deepEqual(ahmad.fieldsByRound[2], ['avg_gold']);
 });
