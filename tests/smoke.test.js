@@ -36,7 +36,9 @@ test('SPEC §6.1 victor R1 with total=20, weapons category', async () => {
     await page.fill('#f_victor_total_all', '20');
     await page.waitForTimeout(200);
     const text = await page.textContent('#result');
-    assert.ok(text.includes('期望价值'));
+    assert.ok(text.includes('保底'), `expected "保底" in: ${text}`);
+    assert.ok(text.includes('格价'), `expected "格价" in: ${text}`);
+    assert.ok(text.includes('w'), `expected "w" unit suffix in: ${text}`);
     assert.ok(text.includes('出价建议'));
   });
 });

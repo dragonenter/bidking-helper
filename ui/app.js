@@ -27,6 +27,11 @@ function fmt(n) {
   return n.toFixed(2);
 }
 
+function fmtW(n) {
+  if (n === null || n === undefined) return '—w';
+  return `${n.toFixed(2)}w`;
+}
+
 function render(state) {
   const role = state.role || Object.keys(ROLES)[0];
   const round = Number(state.round || 1);
@@ -67,24 +72,38 @@ function compute(state) {
   const cat = CATEGORY_DATA.find((c) => c.id === state.category) ?? null;
   const v = valuate(combos, cat);
   const round = Number(state.round || 1);
-  const bids = suggestBids(v, round);
+  // Bid suggestions based on items_category (most accurate when category is known)
+  const bids = suggestBids(v.items_category, round);
+
+  // Build red count distribution display
+  const redDistEntries = Object.entries(v.redDistribution)
+    .sort((a, b) => Number(a[0]) - Number(b[0]))
+    .map(([k, frac]) => `红 ${k} 件: ${Math.round(frac * 100)}%`)
+    .join(' | ');
 
   result.innerHTML = `
     <div class="metric expected">
-      <div class="label">期望价值</div>
-      <div class="value">${fmt(v.expected)}</div>
+      <div class="label">保底价（金×2+红×10）</div>
+      <div class="value">${fmtW(v.items_conservative.expected)}</div>
+      <div class="sub">区间: ${fmtW(v.items_conservative.p5)} ~ ${fmtW(v.items_conservative.p95)}</div>
     </div>
     <div class="metric range">
-      <div class="label">价值区间（5%~95% 分位）</div>
-      <div class="value">${fmt(v.p5)} ~ ${fmt(v.p95)}</div>
+      <div class="label">品类件价（期望）</div>
+      <div class="value">${fmtW(v.items_category.expected)}</div>
+      <div class="sub">区间: ${fmtW(v.items_category.p5)} ~ ${fmtW(v.items_category.p95)}</div>
+    </div>
+    <div class="metric grid">
+      <div class="label">格价范围</div>
+      <div class="value">${fmtW(v.grid_market.expectedLow)} ~ ${fmtW(v.grid_market.expectedHigh)}</div>
     </div>
     <div class="metric bid">
       <div class="label">出价建议（${bids.rule}）</div>
       <div class="value">
-        ${bids.burst !== null ? `速胜: ${fmt(bids.burst)} | ` : ''}保守: ${fmt(bids.conservative)} | 激进: ${fmt(bids.aggressive)}
+        ${bids.burst !== null ? `速胜: ${fmtW(bids.burst)} | ` : ''}保守: ${fmtW(bids.conservative)} | 激进: ${fmtW(bids.aggressive)}
       </div>
     </div>
     <div class="combos-info">当前可行组合数：<strong>${v.combos}</strong>（越少表示信息越充分）</div>
+    ${redDistEntries ? `<div class="red-dist">红件分布: ${redDistEntries}</div>` : ''}
   `;
 }
 

@@ -11,6 +11,29 @@ export const GLOBAL_EXACT = {
   redGridMax: 6.78,
 };
 
+// CONSERVATIVE valuation: per-item floor estimate (worst-case)
+// Source: wstwxl/Bidking-web
+export const CONSERVATIVE = {
+  goldItem: 2.0,   // 金件保守 2w
+  redItem: 10.0,   // 红件保守 10w
+};
+
+// MARKET_GRID valuation: per-grid market estimate
+// Source: wstwxl/Bidking-web
+export const MARKET_GRID = {
+  goldGrid: 1.13,
+  purpleGrid: 0.28,
+  redGridMin: 4.77,
+  redGridMax: 6.78,
+};
+
+// Uncertainty range for unknown red avg-grid (grids per red item)
+// Source: wstwxl/Bidking-web
+export const RED_GRID_BOUNDS = {
+  floor: 1,   // assume 1 grid per red item (floor)
+  ceil: 18,   // assume 18 grids per red item (ceiling)
+};
+
 export const GRID_PRICES = {
   white: 0.0,
   green: 0.0,
