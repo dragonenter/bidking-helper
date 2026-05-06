@@ -5,6 +5,7 @@ import { CATEGORY_DATA } from '../data/categories.js';
 import { enumerateCombos } from '../core/solver.js';
 import { valuate } from '../core/valuator.js';
 import { suggestBids } from '../core/bidder.js';
+import { startCapture, stopCapture, isCapturing } from './capture.js';
 
 const STORAGE_KEY = 'bidking-helper-state-v1';
 
@@ -138,6 +139,62 @@ function init() {
   });
 
   render(state);
+
+  // --- Phase 1.1 screen capture wiring ---
+  const captureBtn = $('capture-toggle');
+  const statusEl = $('capture-status');
+  const previewContainer = $('preview-container');
+  const previewCanvas = $('preview-canvas');
+  const resolutionEl = $('preview-resolution');
+  const fpsEl = $('preview-fps');
+  let frameCount = 0;
+  let lastFpsUpdate = Date.now();
+
+  function setStatus(text, isError = false) {
+    statusEl.textContent = text;
+    statusEl.style.color = isError ? 'var(--red)' : 'var(--muted)';
+  }
+
+  function setRunning(running) {
+    captureBtn.textContent = running ? '⏹ 停止监控' : '📷 开始监控游戏';
+    captureBtn.classList.toggle('primary', !running);
+    captureBtn.classList.toggle('danger', running);
+    previewContainer.hidden = !running;
+  }
+
+  captureBtn.addEventListener('click', async () => {
+    if (isCapturing()) {
+      stopCapture();
+      setRunning(false);
+      setStatus('已停止');
+      return;
+    }
+    try {
+      setStatus('请在弹窗中选择游戏窗口...');
+      await startCapture((frame) => {
+        // Draw to preview at scaled-down size
+        const ctx = previewCanvas.getContext('2d');
+        const scale = Math.min(320 / frame.width, 180 / frame.height);
+        previewCanvas.width = Math.round(frame.width * scale);
+        previewCanvas.height = Math.round(frame.height * scale);
+        ctx.drawImage(frame, 0, 0, previewCanvas.width, previewCanvas.height);
+
+        resolutionEl.textContent = `源分辨率: ${frame.width}×${frame.height}`;
+        frameCount++;
+        const now = Date.now();
+        if (now - lastFpsUpdate >= 1000) {
+          fpsEl.textContent = `${frameCount} fps`;
+          frameCount = 0;
+          lastFpsUpdate = now;
+        }
+      });
+      setRunning(true);
+      setStatus('正在监控');
+    } catch (err) {
+      setStatus(err.message, true);
+      setRunning(false);
+    }
+  });
 }
 
 init();

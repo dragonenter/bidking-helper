@@ -36,3 +36,52 @@ hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 .empty { color: var(--muted); text-align: center; padding: 40px 0; }
 .error { color: var(--red); padding: 16px; background: var(--red-bg); border-radius: 8px; }
 @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+.capture-bar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.capture-bar button {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+}
+.capture-bar button.primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.capture-bar button.danger {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+}
+.capture-bar .muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+#preview-container {
+  margin-top: 12px;
+  width: 100%;
+}
+#preview-canvas {
+  max-width: 320px;
+  max-height: 180px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #000;
+  display: block;
+}
+.preview-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}

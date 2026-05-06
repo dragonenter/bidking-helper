@@ -12,6 +12,18 @@
   <p class="subtitle">输入角色技能解锁的信息，实时估算仓的期望价值和出价上限</p>
 </header>
 
+<section class="capture-bar">
+  <button id="capture-toggle" class="primary">📷 开始监控游戏</button>
+  <span id="capture-status" class="muted">未启动</span>
+  <div id="preview-container" hidden>
+    <canvas id="preview-canvas"></canvas>
+    <div class="preview-meta">
+      <span id="preview-resolution">—</span>
+      <span id="preview-fps">—</span>
+    </div>
+  </div>
+</section>
+
 <main class="grid">
   <section class="panel input-panel">
     <h2>输入</h2>
