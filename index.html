@@ -14,7 +14,10 @@
 
 <section class="capture-bar">
   <button id="capture-toggle" class="primary">📷 开始监控游戏</button>
+  <button id="roi-edit" hidden>✏️ 标定识别区域</button>
+  <button id="roi-clear" hidden class="ghost">🗑 清除标定</button>
   <span id="capture-status" class="muted">未启动</span>
+  <span id="roi-status" class="muted"></span>
   <div id="preview-container" hidden>
     <canvas id="preview-canvas"></canvas>
     <div class="preview-meta">

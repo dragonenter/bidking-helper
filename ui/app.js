@@ -6,6 +6,7 @@ import { enumerateCombos } from '../core/solver.js';
 import { valuate } from '../core/valuator.js';
 import { suggestBids } from '../core/bidder.js';
 import { startCapture, stopCapture, isCapturing } from './capture.js';
+import { loadRoi, saveRoi, drawRoiOverlay, setupRoiEditor } from './roi.js';
 
 const STORAGE_KEY = 'bidking-helper-state-v1';
 
@@ -140,19 +141,49 @@ function init() {
 
   render(state);
 
-  // --- Phase 1.1 screen capture wiring ---
+  // --- Phase 1.1 + 1.2 capture + ROI wiring ---
   const captureBtn = $('capture-toggle');
-  const statusEl = $('capture-status');
+  const roiEditBtn = $('roi-edit');
+  const roiClearBtn = $('roi-clear');
+  const captureStatusEl = $('capture-status');
+  const roiStatusEl = $('roi-status');
   const previewContainer = $('preview-container');
   const previewCanvas = $('preview-canvas');
   const resolutionEl = $('preview-resolution');
   const fpsEl = $('preview-fps');
+
+  let currentRoi = loadRoi();
   let frameCount = 0;
   let lastFpsUpdate = Date.now();
+  let lastFrame = null; // most recent source-resolution frame
 
-  function setStatus(text, isError = false) {
-    statusEl.textContent = text;
-    statusEl.style.color = isError ? 'var(--red)' : 'var(--muted)';
+  const editor = setupRoiEditor(previewCanvas, (roi) => {
+    if (roi !== null) {
+      currentRoi = roi;
+      saveRoi(roi);
+      updateRoiStatus();
+    }
+    editor.disable();
+    previewCanvas.classList.remove('editing');
+    roiEditBtn.textContent = '✏️ 标定识别区域';
+  });
+
+  function updateRoiStatus() {
+    if (currentRoi) {
+      const pct = (n) => Math.round(n * 100);
+      roiStatusEl.textContent = `识别区域: ${pct(currentRoi.w)}%×${pct(currentRoi.h)}% @ (${pct(currentRoi.x)}%,${pct(currentRoi.y)}%)`;
+      roiStatusEl.style.color = 'var(--text)';
+      roiClearBtn.hidden = false;
+    } else {
+      roiStatusEl.textContent = '未标定（点 ✏️ 标定识别区域 拖框选择）';
+      roiStatusEl.style.color = 'var(--muted)';
+      roiClearBtn.hidden = true;
+    }
+  }
+
+  function setCaptureStatus(text, isError = false) {
+    captureStatusEl.textContent = text;
+    captureStatusEl.style.color = isError ? 'var(--red)' : 'var(--muted)';
   }
 
   function setRunning(running) {
@@ -160,41 +191,94 @@ function init() {
     captureBtn.classList.toggle('primary', !running);
     captureBtn.classList.toggle('danger', running);
     previewContainer.hidden = !running;
+    roiEditBtn.hidden = !running;
+    if (!running) {
+      roiClearBtn.hidden = true;
+    } else {
+      updateRoiStatus();
+    }
+  }
+
+  function renderFrame(frame) {
+    lastFrame = frame;
+    const ctx = previewCanvas.getContext('2d');
+    const scale = Math.min(320 / frame.width, 180 / frame.height);
+    previewCanvas.width = Math.round(frame.width * scale);
+    previewCanvas.height = Math.round(frame.height * scale);
+    ctx.drawImage(frame, 0, 0, previewCanvas.width, previewCanvas.height);
+
+    // Draw ROI overlay (committed)
+    drawRoiOverlay(previewCanvas, ctx, currentRoi);
+    // Draw drag-in-progress rectangle (yellow)
+    const dragRect = editor.getDragRect();
+    if (dragRect) {
+      ctx.save();
+      ctx.strokeStyle = '#eab308';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(
+        Math.round(dragRect.x * previewCanvas.width),
+        Math.round(dragRect.y * previewCanvas.height),
+        Math.round(dragRect.w * previewCanvas.width),
+        Math.round(dragRect.h * previewCanvas.height)
+      );
+      ctx.restore();
+    }
+
+    resolutionEl.textContent = `源分辨率: ${frame.width}×${frame.height}`;
+    frameCount++;
+    const now = Date.now();
+    if (now - lastFpsUpdate >= 1000) {
+      fpsEl.textContent = `${frameCount} fps`;
+      frameCount = 0;
+      lastFpsUpdate = now;
+    }
   }
 
   captureBtn.addEventListener('click', async () => {
     if (isCapturing()) {
       stopCapture();
       setRunning(false);
-      setStatus('已停止');
+      setCaptureStatus('已停止');
       return;
     }
     try {
-      setStatus('请在弹窗中选择游戏窗口...');
-      await startCapture((frame) => {
-        // Draw to preview at scaled-down size
-        const ctx = previewCanvas.getContext('2d');
-        const scale = Math.min(320 / frame.width, 180 / frame.height);
-        previewCanvas.width = Math.round(frame.width * scale);
-        previewCanvas.height = Math.round(frame.height * scale);
-        ctx.drawImage(frame, 0, 0, previewCanvas.width, previewCanvas.height);
-
-        resolutionEl.textContent = `源分辨率: ${frame.width}×${frame.height}`;
-        frameCount++;
-        const now = Date.now();
-        if (now - lastFpsUpdate >= 1000) {
-          fpsEl.textContent = `${frameCount} fps`;
-          frameCount = 0;
-          lastFpsUpdate = now;
-        }
-      });
+      setCaptureStatus('请在弹窗中选择游戏窗口...');
+      await startCapture(renderFrame);
       setRunning(true);
-      setStatus('正在监控');
+      setCaptureStatus('正在监控');
     } catch (err) {
-      setStatus(err.message, true);
+      setCaptureStatus(err.message, true);
       setRunning(false);
     }
   });
+
+  roiEditBtn.addEventListener('click', () => {
+    if (editor.isEnabled()) {
+      editor.disable();
+      previewCanvas.classList.remove('editing');
+      roiEditBtn.textContent = '✏️ 标定识别区域';
+      setCaptureStatus('已取消标定');
+    } else {
+      editor.enable();
+      previewCanvas.classList.add('editing');
+      roiEditBtn.textContent = '取消';
+      setCaptureStatus('在预览框内拖动鼠标框选要识别的区域');
+    }
+  });
+
+  roiClearBtn.addEventListener('click', () => {
+    currentRoi = null;
+    saveRoi(null);
+    updateRoiStatus();
+  });
+
+  // Render frame loop also needs to refresh during drag (mouse move)
+  previewCanvas.addEventListener('mousemove', () => {
+    if (editor.isEnabled() && lastFrame) renderFrame(lastFrame);
+  });
+
+  updateRoiStatus();
 }
 
 init();
