@@ -9,8 +9,10 @@ import { startCapture, stopCapture, isCapturing } from './capture.js';
 import { loadRoi, saveRoi, drawRoiOverlay, setupRoiEditor, cropFrameToRoi } from './roi.js';
 import { ROI_PRESETS, PRIMARY_ROI_KEY } from '../data/roi_presets.js';
 import { parseCentralInfo } from '../core/parser.js';
-import { recognize as ocrRecognize } from './ocr.js';
+import { recognize as ocrRecognize, recognizeFull, recognizeRegion } from './ocr.js';
 import { applyParsedToForm, fieldLabel } from './autofill.js';
+import { detectGameState, DEFAULT_ROIS } from './state_detector.js';
+import { hasEndPrompt, hasAuctionLobby, hasRewardContinue, hasHomeBidButton, parseRoundNumber } from './triggers.js';
 
 const STORAGE_KEY = 'bidking-helper-state-v1';
 
@@ -198,6 +200,11 @@ function init() {
   const ocrDebugEl = $('ocr-debug');
   const ocrTextEl = $('ocr-text');
   const ocrParsedEl = $('ocr-parsed');
+  const stateCurrentEl = $('state-current');
+  const stateConfidenceEl = $('state-confidence');
+  const triggerRoundEl = $('trigger-round');
+  const triggerEndEl = $('trigger-end');
+  const triggerLobbyEl = $('trigger-lobby');
 
   for (const [key, preset] of Object.entries(ROI_PRESETS)) {
     const opt = document.createElement('option');
@@ -250,27 +257,99 @@ function init() {
     ocrDebugEl.hidden = false;
   });
 
+  // State label map for display (mirrors sarkozyfan's STATE_LABELS)
+  const STATE_LABELS = {
+    bid_overlay:    '出价弹窗',
+    main_screen:    '主界面',
+    tool_strip:     '底部道具栏',
+    reveal_overlay: '情报揭示界面',
+    unknown:        '未知状态',
+  };
+
+  function updateStateDisplay(stateResult) {
+    if (!stateCurrentEl) return;
+    const label = STATE_LABELS[stateResult.state] ?? stateResult.state;
+    stateCurrentEl.textContent = label;
+    // Remove all state class names then add the current one
+    stateCurrentEl.className = `state-badge ${stateResult.state}`;
+    if (stateConfidenceEl) {
+      stateConfidenceEl.textContent = stateResult.state === 'unknown'
+        ? '—'
+        : `置信度 ${Math.round(stateResult.confidence * 100)}%`;
+    }
+  }
+
+  function updateTriggerDisplay(triggers) {
+    if (triggerRoundEl) {
+      triggerRoundEl.textContent = triggers.round ? `第 ${triggers.round} 轮` : '轮次未识别';
+      triggerRoundEl.style.color = triggers.round ? 'var(--gold)' : '';
+    }
+    if (triggerEndEl) {
+      triggerEndEl.textContent = triggers.end ? '对局结束!' : '—';
+      triggerEndEl.style.color = triggers.end ? 'var(--red)' : '';
+    }
+    if (triggerLobbyEl) {
+      triggerLobbyEl.textContent = triggers.lobby ? '竞拍大厅' : '—';
+      triggerLobbyEl.style.color = triggers.lobby ? 'var(--primary)' : '';
+    }
+  }
+
   async function runOcrOnFrame(frame) {
-    if (!ocrEnabled || ocrInFlight || !currentRoi) return;
+    if (!ocrEnabled || ocrInFlight) return;
     const now = Date.now();
     if (now - ocrLastRunAt < OCR_INTERVAL_MS) return;
     ocrLastRunAt = now;
     ocrInFlight = true;
 
     try {
-      const cropped = cropFrameToRoi(frame, currentRoi);
-      if (!cropped) { ocrInFlight = false; return; }
-      const text = await ocrRecognize(cropped);
-      ocrTextEl.textContent = text || '(空)';
-      const parsed = parseCentralInfo(text);
+      // 1. State detection (fast pixel-based, no OCR)
+      const stateResult = detectGameState(frame, DEFAULT_ROIS);
+      updateStateDisplay(stateResult);
+
+      // 2. Always OCR full window (trigger detection)
+      const fullText = await recognizeFull(frame);
+
+      // 3. OCR central region if ROI is set
+      let centralText = '';
+      if (currentRoi) {
+        centralText = await recognizeRegion(frame, currentRoi);
+      }
+
+      // 4. Update debug panel with both texts
+      ocrTextEl.textContent = `[全窗口]\n${fullText || '(空)'}\n\n[中央]\n${centralText || '(空)'}`;
+
+      // 5. Trigger detection
+      const triggers = {
+        end:           hasEndPrompt(fullText),
+        lobby:         hasAuctionLobby(fullText),
+        reward:        hasRewardContinue(fullText),
+        homeBidButton: hasHomeBidButton(fullText),
+        round:         parseRoundNumber(fullText) ?? parseRoundNumber(centralText),
+      };
+      updateTriggerDisplay(triggers);
+
+      // 6. Parse central text for constraints
+      const parsed = parseCentralInfo(centralText);
       const summary = Object.entries(parsed)
         .filter(([k]) => !['parsed_facts', 'unparsed_lines'].includes(k))
         .map(([k, v]) => `${fieldLabel(k)} (${k}): ${v}`)
         .join('\n');
       ocrParsedEl.textContent = summary || '(无可识别字段)';
+
+      // 7. Auto-fill form if central text yielded fields
       const applied = applyParsedToForm(parsed, $('dynamic-fields'));
       const appliedCount = applied.filter((a) => a.applied).length;
-      setOcrStatus(`OCR 完成（自动填入 ${appliedCount} 项）`);
+
+      // 8. Auto-update round if detected and changed
+      const appState = loadState();
+      if (triggers.round && triggers.round !== Number(appState.round || 1)) {
+        $('round').value = String(triggers.round);
+        appState.round = triggers.round;
+        saveState(appState);
+        render(appState);
+      }
+
+      setOcrStatus(`OCR 完成（自动填入 ${appliedCount} 项，状态: ${STATE_LABELS[stateResult.state] ?? stateResult.state}）`);
     } catch (err) {
       setOcrStatus(`OCR 失败: ${err.message}`, true);
     } finally {

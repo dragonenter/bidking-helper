@@ -83,3 +83,12 @@ test('Phase 1.3b OCR controls render', async () => {
     assert.ok(debugExists > 0, '#ocr-debug missing');
   });
 });
+
+test('Phase 1.4 state + trigger display renders', async () => {
+  await withPage(async (page) => {
+    const stateEl = await page.locator('#state-current').count();
+    const triggerEl = await page.locator('#trigger-round').count();
+    assert.ok(stateEl > 0, '#state-current missing');
+    assert.ok(triggerEl > 0, '#trigger-round missing');
+  });
+});
