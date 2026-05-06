@@ -13,17 +13,46 @@
 </header>
 
 <section class="capture-bar">
-  <button id="capture-toggle" class="primary">📷 开始监控游戏</button>
-  <button id="roi-edit" hidden>✏️ 标定识别区域</button>
-  <button id="roi-clear" hidden class="ghost">🗑 清除标定</button>
-  <span id="capture-status" class="muted">未启动</span>
-  <span id="roi-status" class="muted"></span>
+  <div class="capture-row">
+    <button id="capture-toggle" class="primary">📷 开始监控游戏</button>
+    <button id="ocr-toggle" hidden>🤖 启用自动识别</button>
+    <span id="capture-status" class="muted">未启动</span>
+    <span id="ocr-status" class="muted"></span>
+  </div>
+
+  <div class="capture-row" id="roi-controls" hidden>
+    <label class="muted">ROI 预设:</label>
+    <select id="roi-preset">
+      <option value="">自定义（手动框选）</option>
+      <!-- options populated by JS -->
+    </select>
+    <button id="roi-edit">✏️ 标定识别区域</button>
+    <button id="roi-clear" class="ghost" hidden>🗑 清除标定</button>
+    <span id="roi-status" class="muted"></span>
+  </div>
+
   <div id="preview-container" hidden>
     <canvas id="preview-canvas"></canvas>
     <div class="preview-meta">
       <span id="preview-resolution">—</span>
       <span id="preview-fps">—</span>
     </div>
+  </div>
+
+  <div id="ocr-debug" hidden>
+    <details>
+      <summary class="muted">OCR 调试信息（点击展开）</summary>
+      <div class="debug-grid">
+        <div>
+          <h4>OCR 原文</h4>
+          <pre id="ocr-text" class="ocr-pre">—</pre>
+        </div>
+        <div>
+          <h4>解析字段</h4>
+          <pre id="ocr-parsed" class="ocr-pre">—</pre>
+        </div>
+      </div>
+    </details>
   </div>
 </section>
 

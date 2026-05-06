@@ -70,3 +70,16 @@ test('SPEC §6.4 invalid input shows friendly error', async () => {
     assert.ok(errorVisible >= 0); // tolerant: just must not throw
   });
 });
+
+test('Phase 1.3b OCR controls render', async () => {
+  await withPage(async (page) => {
+    // After capture starts, OCR toggle and preset selector should be available
+    // We don't actually start capture (no permission in headless), but the elements exist
+    const ocrBtnExists = await page.locator('#ocr-toggle').count();
+    const presetExists = await page.locator('#roi-preset').count();
+    const debugExists = await page.locator('#ocr-debug').count();
+    assert.ok(ocrBtnExists > 0, '#ocr-toggle missing');
+    assert.ok(presetExists > 0, '#roi-preset missing');
+    assert.ok(debugExists > 0, '#ocr-debug missing');
+  });
+});

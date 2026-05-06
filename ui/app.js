@@ -6,7 +6,11 @@ import { enumerateCombos } from '../core/solver.js';
 import { valuate } from '../core/valuator.js';
 import { suggestBids } from '../core/bidder.js';
 import { startCapture, stopCapture, isCapturing } from './capture.js';
-import { loadRoi, saveRoi, drawRoiOverlay, setupRoiEditor } from './roi.js';
+import { loadRoi, saveRoi, drawRoiOverlay, setupRoiEditor, cropFrameToRoi } from './roi.js';
+import { ROI_PRESETS, PRIMARY_ROI_KEY } from '../data/roi_presets.js';
+import { parseCentralInfo } from '../core/parser.js';
+import { recognize as ocrRecognize } from './ocr.js';
+import { applyParsedToForm, fieldLabel } from './autofill.js';
 
 const STORAGE_KEY = 'bidking-helper-state-v1';
 
@@ -186,12 +190,101 @@ function init() {
     captureStatusEl.style.color = isError ? 'var(--red)' : 'var(--muted)';
   }
 
+  // Populate preset dropdown
+  const roiPresetEl = $('roi-preset');
+  const roiControlsEl = $('roi-controls');
+  const ocrToggleBtn = $('ocr-toggle');
+  const ocrStatusEl = $('ocr-status');
+  const ocrDebugEl = $('ocr-debug');
+  const ocrTextEl = $('ocr-text');
+  const ocrParsedEl = $('ocr-parsed');
+
+  for (const [key, preset] of Object.entries(ROI_PRESETS)) {
+    const opt = document.createElement('option');
+    opt.value = key;
+    opt.textContent = preset.label;
+    roiPresetEl.appendChild(opt);
+  }
+
+  // OCR state
+  let ocrEnabled = false;
+  let ocrInFlight = false;
+  let ocrLastRunAt = 0;
+  const OCR_INTERVAL_MS = 1500;
+
+  function setOcrStatus(text, isError = false) {
+    ocrStatusEl.textContent = text;
+    ocrStatusEl.style.color = isError ? 'var(--red)' : 'var(--muted)';
+  }
+
+  roiPresetEl.addEventListener('change', (e) => {
+    const key = e.target.value;
+    if (!key) return; // custom mode, don't change ROI
+    const preset = ROI_PRESETS[key];
+    if (!preset) return;
+    const c = preset.rois[PRIMARY_ROI_KEY];
+    currentRoi = { x: c.x, y: c.y, w: c.w, h: c.h };
+    saveRoi(currentRoi);
+    updateRoiStatus();
+  });
+
+  ocrToggleBtn.addEventListener('click', async () => {
+    if (ocrEnabled) {
+      ocrEnabled = false;
+      ocrToggleBtn.textContent = '🤖 启用自动识别';
+      ocrToggleBtn.classList.remove('danger');
+      ocrToggleBtn.classList.add('primary');
+      setOcrStatus('已关闭');
+      ocrDebugEl.hidden = true;
+      return;
+    }
+    if (!currentRoi) {
+      setOcrStatus('请先标定识别区域（拖框或选预设）', true);
+      return;
+    }
+    ocrEnabled = true;
+    ocrToggleBtn.textContent = '⏹ 停止自动识别';
+    ocrToggleBtn.classList.remove('primary');
+    ocrToggleBtn.classList.add('danger');
+    setOcrStatus('OCR 加载中（首次约需 5-10 秒）...');
+    ocrDebugEl.hidden = false;
+  });
+
+  async function runOcrOnFrame(frame) {
+    if (!ocrEnabled || ocrInFlight || !currentRoi) return;
+    const now = Date.now();
+    if (now - ocrLastRunAt < OCR_INTERVAL_MS) return;
+    ocrLastRunAt = now;
+    ocrInFlight = true;
+
+    try {
+      const cropped = cropFrameToRoi(frame, currentRoi);
+      if (!cropped) { ocrInFlight = false; return; }
+      const text = await ocrRecognize(cropped);
+      ocrTextEl.textContent = text || '(空)';
+      const parsed = parseCentralInfo(text);
+      const summary = Object.entries(parsed)
+        .filter(([k]) => !['parsed_facts', 'unparsed_lines'].includes(k))
+        .map(([k, v]) => `${fieldLabel(k)} (${k}): ${v}`)
+        .join('\n');
+      ocrParsedEl.textContent = summary || '(无可识别字段)';
+      const applied = applyParsedToForm(parsed, $('dynamic-fields'));
+      const appliedCount = applied.filter((a) => a.applied).length;
+      setOcrStatus(`OCR 完成（自动填入 ${appliedCount} 项）`);
+    } catch (err) {
+      setOcrStatus(`OCR 失败: ${err.message}`, true);
+    } finally {
+      ocrInFlight = false;
+    }
+  }
+
   function setRunning(running) {
     captureBtn.textContent = running ? '⏹ 停止监控' : '📷 开始监控游戏';
     captureBtn.classList.toggle('primary', !running);
     captureBtn.classList.toggle('danger', running);
     previewContainer.hidden = !running;
-    roiEditBtn.hidden = !running;
+    roiControlsEl.hidden = !running;
+    ocrToggleBtn.hidden = !running;
     if (!running) {
       roiClearBtn.hidden = true;
     } else {
@@ -233,6 +326,8 @@ function init() {
       frameCount = 0;
       lastFpsUpdate = now;
     }
+
+    runOcrOnFrame(frame);
   }
 
   captureBtn.addEventListener('click', async () => {
